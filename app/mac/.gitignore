@@ -1,0 +1,9 @@
+# SwiftPM
+/.build/
+.swiftpm/
+
+# Assembled app bundle
+/build/
+
+# macOS
+.DS_Store
