@@ -8,9 +8,6 @@ struct SettingsView: View {
             ApplicationSettingsView()
                 .tabItem { Label("Application", systemImage: "macwindow") }
 
-            FunctionsSettingsView()
-                .tabItem { Label("Functions", systemImage: "function") }
-
             AIModelsSettingsView()
                 .tabItem { Label("AI Models", systemImage: "brain") }
         }
