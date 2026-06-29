@@ -1,17 +1,19 @@
 import SwiftUI
 
-/// Settings screen. Intentionally empty for now — content to be added later.
+/// Root of the Settings window. Hosts the three setting areas as tabs and
+/// switches between their views. Each tab's content lives in its own view.
 struct SettingsView: View {
     var body: some View {
-        VStack {
-            Text("Settings")
-                .font(.title2)
-                .fontWeight(.semibold)
-            Text("Coming soon.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+        TabView {
+            ApplicationSettingsView()
+                .tabItem { Label("Application", systemImage: "macwindow") }
+
+            FunctionsSettingsView()
+                .tabItem { Label("Functions", systemImage: "function") }
+
+            AIModelsSettingsView()
+                .tabItem { Label("AI Models", systemImage: "brain") }
         }
-        .padding(28)
-        .frame(width: 420, height: 300)
+        .frame(width: 520, height: 560)
     }
 }
