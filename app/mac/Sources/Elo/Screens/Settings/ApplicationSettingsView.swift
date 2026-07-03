@@ -77,8 +77,6 @@ struct ApplicationSettingsView: View {
             }
         } header: {
             Text("Hotkey")
-        } footer: {
-            Text("This helps you invoke Elo (default: ⌘⌥E).")
         }
     }
 

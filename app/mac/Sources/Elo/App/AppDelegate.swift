@@ -7,6 +7,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let aboutWindowController = AboutWindowController()
     private let settingsWindowController = SettingsWindowController()
 
+    private lazy var hotkeyManager = HotkeyManager { [weak self] in
+        self?.handleHotkey()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItemController = StatusItemController(
             onSettings: handleSettings,
@@ -14,7 +18,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onQuit: handleQuit
         )
 
-        log("Launched (shell only).")
+        // Register the (default, for now) global hotkey.
+        let hotkey = Hotkey.default
+        hotkeyManager.register(keyCode: hotkey.keyCode, modifierFlags: hotkey.modifierFlags)
+
+        log("Launched.")
+    }
+
+    // MARK: - Hotkey
+
+    private func handleHotkey() {
+        log("Elo 👋, at your service!")
     }
 
     // MARK: - Menu handlers
