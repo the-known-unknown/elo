@@ -141,7 +141,7 @@ struct ApplicationSettingsView: View {
                 Spacer()
                 if !accessibilityGranted {
                     Button("Grant") {
-                        AccessibilityManager.openSettings()
+                        AccessibilityManager.requestAccess()
                     }
                 }
             }

@@ -1,4 +1,3 @@
-import AppKit
 import ApplicationServices
 
 /// Wraps the macOS Accessibility (TCC) permission.
@@ -11,18 +10,11 @@ enum AccessibilityManager {
         AXIsProcessTrusted()
     }
 
-    /// Opens System Settings → Privacy & Security → Accessibility.
-    ///
-    /// We deep-link here rather than using the `AXIsProcessTrustedWithOptions`
-    /// system prompt: that prompt deactivates our Dock-less agent app, which makes
-    /// the Settings window appear to vanish when it's dismissed.
-    static func openSettings() {
-        guard
-            let url = URL(
-                string:
-                    "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
-            )
-        else { return }
-        NSWorkspace.shared.open(url)
+    /// Requests access. This registers Elo in the Accessibility list (so it can
+    /// be enabled) and shows the system "Open System Settings / Deny" prompt.
+    static func requestAccess() {
+        let options =
+            [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        _ = AXIsProcessTrustedWithOptions(options)
     }
 }
