@@ -16,7 +16,8 @@ struct ApplicationSettingsView: View {
     /// The function currently being edited (drives the modal editor).
     @State private var editingFunction: FunctionItem?
 
-    private let hotkeyDisplay = "⌘⌥E"
+    /// UI-only hotkey state (not yet persisted or registered globally).
+    @State private var hotkey = Hotkey.default
 
     var body: some View {
         Form {
@@ -72,13 +73,7 @@ struct ApplicationSettingsView: View {
     private var hotkeySection: some View {
         Section {
             LabeledContent("Invoke Elo") {
-                // Placeholder for the real KeyboardShortcuts recorder (added later).
-                Button(action: {}) {
-                    Text(hotkeyDisplay)
-                        .font(.system(.body, design: .monospaced))
-                }
-                .buttonStyle(.bordered)
-                .help("Shortcut recording coming soon")
+                HotkeyRecorderView(hotkey: $hotkey)
             }
         } header: {
             Text("Hotkey")
