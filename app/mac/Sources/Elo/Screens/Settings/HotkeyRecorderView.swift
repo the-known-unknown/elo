@@ -1,30 +1,6 @@
 import AppKit
 import SwiftUI
 
-/// A UI-only representation of a keyboard shortcut.
-///
-/// Will be folded into the persisted settings model later. `keyCode` and
-/// `modifierFlags` are retained so we can register the global hotkey (via Carbon)
-/// in a future step; `keyLabel` is captured for display.
-struct Hotkey {
-    var keyCode: UInt16
-    var modifierFlags: NSEvent.ModifierFlags
-    var keyLabel: String
-
-    /// The default shortcut: ⌘⌥E (E is virtual key code 14).
-    static let `default` = Hotkey(keyCode: 14, modifierFlags: [.command, .option], keyLabel: "E")
-
-    /// Human-readable form, e.g. "⌘⌥E" (modifier order matches macOS convention).
-    var displayString: String {
-        var symbols = ""
-        if modifierFlags.contains(.control) { symbols += "⌃" }
-        if modifierFlags.contains(.option) { symbols += "⌥" }
-        if modifierFlags.contains(.shift) { symbols += "⇧" }
-        if modifierFlags.contains(.command) { symbols += "⌘" }
-        return symbols + keyLabel
-    }
-}
-
 /// A control that records a keyboard shortcut. Click to start recording, then
 /// press a key combination that includes at least one modifier. Escape cancels.
 struct HotkeyRecorderView: View {

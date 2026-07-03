@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 /// The "Application" settings tab.
@@ -7,17 +8,20 @@ import SwiftUI
 /// Persistence, the real hotkey recorder, and live permission status will be
 /// wired in later steps.
 struct ApplicationSettingsView: View {
+    /// Shared source of truth for the invocation hotkey (also observed by the app
+    /// to re-register the global shortcut when it changes).
+    @ObservedObject var hotkeyStore: HotkeyStore
+
     /// Mirrors the real login-item state; explicitly hydrated from
     /// `LaunchAtLoginManager` on open and after each change.
     @State private var launchAtLogin = LaunchAtLoginManager.isEnabled
-    @State private var permissionsGranted = false
+
+    /// Live Accessibility permission status (re-hydrated when the window opens).
+    @State private var accessibilityGranted = AccessibilityManager.isTrusted
     @State private var functions: [FunctionItem] = FunctionItem.defaults
 
     /// The function currently being edited (drives the modal editor).
     @State private var editingFunction: FunctionItem?
-
-    /// UI-only hotkey state (not yet persisted or registered globally).
-    @State private var hotkey = Hotkey.default
 
     var body: some View {
         Form {
@@ -40,6 +44,13 @@ struct ApplicationSettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) {
             _ in
             launchAtLogin = LaunchAtLoginManager.isEnabled
+            accessibilityGranted = AccessibilityManager.isTrusted
+        }
+        // macOS sends no notification when Accessibility is granted, so poll the
+        // live status while Settings is open (cheap; picks up the grant without
+        // needing the window to regain focus).
+        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
+            accessibilityGranted = AccessibilityManager.isTrusted
         }
     }
 
@@ -73,7 +84,7 @@ struct ApplicationSettingsView: View {
     private var hotkeySection: some View {
         Section {
             LabeledContent("Invoke Elo") {
-                HotkeyRecorderView(hotkey: $hotkey)
+                HotkeyRecorderView(hotkey: $hotkeyStore.hotkey)
             }
         } header: {
             Text("Hotkey")
@@ -122,14 +133,16 @@ struct ApplicationSettingsView: View {
         Section {
             HStack(spacing: 8) {
                 Image(
-                    systemName: permissionsGranted
+                    systemName: accessibilityGranted
                         ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
                 )
-                .foregroundStyle(permissionsGranted ? Color.green : Color.orange)
-                Text(permissionsGranted ? "Permissions granted" : "Permissions not granted")
+                .foregroundStyle(accessibilityGranted ? Color.green : Color.orange)
+                Text(accessibilityGranted ? "Permissions granted" : "Permissions not granted")
                 Spacer()
-                if !permissionsGranted {
-                    Button("Grant") { permissionsGranted = true }
+                if !accessibilityGranted {
+                    Button("Grant") {
+                        AccessibilityManager.openSettings()
+                    }
                 }
             }
         } header: {
