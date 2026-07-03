@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// The "Application" settings tab.
@@ -6,7 +7,9 @@ import SwiftUI
 /// Persistence, the real hotkey recorder, and live permission status will be
 /// wired in later steps.
 struct ApplicationSettingsView: View {
-    @State private var launchAtLogin = false
+    /// Mirrors the real login-item state; explicitly hydrated from
+    /// `LaunchAtLoginManager` on open and after each change.
+    @State private var launchAtLogin = LaunchAtLoginManager.isEnabled
     @State private var permissionsGranted = false
     @State private var functions: [FunctionItem] = FunctionItem.defaults
 
@@ -30,16 +33,38 @@ struct ApplicationSettingsView: View {
                 editingFunction = nil
             }
         }
+        // Re-hydrate live state (e.g. launch-at-login) each time the window is
+        // shown. The window is reused, so `onAppear` only fires once — becoming
+        // key is our signal that Settings was (re)opened.
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) {
+            _ in
+            launchAtLogin = LaunchAtLoginManager.isEnabled
+        }
     }
 
     // MARK: - General
 
     private var generalSection: some View {
         Section {
-            Toggle("Launch Elo at login", isOn: $launchAtLogin)
+            Toggle("Launch Elo on login", isOn: launchAtLoginBinding)
         } header: {
             Text("General")
         }
+    }
+
+    /// The toggle reflects `launchAtLogin`; on user change we apply the setting
+    /// and then set the state to the actual result (snaps back if it failed).
+    private var launchAtLoginBinding: Binding<Bool> {
+        Binding(
+            get: { launchAtLogin },
+            set: { isOn in
+                let ok = LaunchAtLoginManager.setEnabled(isOn)
+                launchAtLogin = LaunchAtLoginManager.isEnabled
+                log(
+                    "Launch at login \(launchAtLogin ? "enabled" : "disabled")\(ok ? "" : " (failed)")."
+                )
+            }
+        )
     }
 
     // MARK: - Hotkey
