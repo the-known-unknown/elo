@@ -29,11 +29,12 @@ struct ApplicationSettingsView: View {
         }
         .formStyle(.grouped)
         .sheet(item: $editingFunction) { function in
-            FunctionEditorView(function: function) { updated in
-                save(updated)
-            } onCancel: {
-                editingFunction = nil
-            }
+            FunctionEditorView(
+                function: function,
+                onSave: { save($0) },
+                onDelete: { delete(function) },
+                onCancel: { editingFunction = nil }
+            )
         }
         // Re-hydrate live state (e.g. launch-at-login) each time the window is
         // shown. The window is reused, so `onAppear` only fires once — becoming
@@ -131,6 +132,12 @@ struct ApplicationSettingsView: View {
         editingFunction = nil
     }
 
+    /// Removes a function from the store and closes the editor.
+    private func delete(_ function: Function) {
+        settingsStore.settings.application.functions.removeAll { $0.id == function.id }
+        editingFunction = nil
+    }
+
     // MARK: - Accessibility
 
     private var accessibilitySection: some View {
@@ -208,6 +215,7 @@ private struct FunctionEditorView: View {
 
     private let original: Function
     private let onSave: (Function) -> Void
+    private let onDelete: () -> Void
     private let onCancel: () -> Void
 
     private let maxWords = 1000
@@ -218,13 +226,21 @@ private struct FunctionEditorView: View {
 
     private var isOverLimit: Bool { wordCount > maxWords }
 
+    private var trimmedLabel: String { label.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var trimmedPrompt: String { prompt.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    /// Save is enabled only when both fields have real text and we're within the limit.
+    private var isValid: Bool { !trimmedLabel.isEmpty && !trimmedPrompt.isEmpty && !isOverLimit }
+
     init(
         function: Function,
         onSave: @escaping (Function) -> Void,
+        onDelete: @escaping () -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.original = function
         self.onSave = onSave
+        self.onDelete = onDelete
         self.onCancel = onCancel
         _label = State(initialValue: function.label)
         _prompt = State(initialValue: function.prompt)
@@ -236,6 +252,11 @@ private struct FunctionEditorView: View {
                 Text("Label")
                 TextField("", text: $label)
                     .textFieldStyle(.roundedBorder)
+                if trimmedLabel.isEmpty {
+                    Text("Label is required.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -250,24 +271,33 @@ private struct FunctionEditorView: View {
                                 isOverLimit ? Color.red : Color(.quaternaryLabelColor), lineWidth: 1
                             )
                     )
-                Text("\(wordCount) / \(maxWords) words")
-                    .font(.caption)
-                    .foregroundStyle(isOverLimit ? Color.red : Color.secondary)
+                HStack {
+                    if trimmedPrompt.isEmpty {
+                        Text("Prompt is required.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Text("\(wordCount) / \(maxWords) words")
+                        .font(.caption)
+                        .foregroundStyle(isOverLimit ? Color.red : Color.secondary)
+                }
             }
 
             HStack {
+                Button("Delete", role: .destructive, action: onDelete)
                 Spacer()
                 Button("Cancel", action: onCancel)
                     .keyboardShortcut(.cancelAction)
                 Button("Save") {
                     var updated = original
-                    updated.label = label
-                    updated.prompt = prompt
+                    updated.label = trimmedLabel
+                    updated.prompt = trimmedPrompt
                     onSave(updated)
                 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
-                .disabled(isOverLimit)
+                .disabled(!isValid)
             }
         }
         .padding(20)
