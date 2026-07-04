@@ -1,221 +1,180 @@
 # Elo (macOS) — Writing Assistant
 
-Elo is a background macOS agent. You select text anywhere — in a native app or a
-browser — and a small floating menu (e.g. **Make concise**, **Improve Writing**)
-appears next to the selection. Choosing an option will eventually run the text
-through an LLM. This is the **front-end prototype**: the menu appears and the
-chosen action is logged, but no LLM is called yet.
+Elo is a background macOS **menu-bar agent**. The end goal: select text anywhere,
+invoke Elo, and have it rewrite the text via an LLM (e.g. "Improve writing",
+"Make concise"). This repo is the app being built up incrementally.
 
-> Status: prototype. The two menu actions only write to the system log.
+> **Current status.** The shell is complete: a menu-bar app with **Settings** and
+> **About** windows, a persisted settings model, a global hotkey, launch-at-login,
+> and accessibility handling. The hotkey currently just logs a greeting — the
+> text-selection reading and the on-screen overlay are **not built yet**.
 
 ---
 
 ## Quick start
 
-### Prerequisites
-- macOS 13 (Ventura) or later
-- Swift toolchain (Swift 5.9+ / Xcode Command Line Tools). Verify with `swift --version`.
+**Prerequisites:** macOS 13+, the Swift toolchain (`swift --version`).
 
-### Build & run
-From this directory (`app/mac`):
-
+**Fast dev loop (logs in the terminal):**
 ```sh
-./build_app.sh            # release build -> build/Elo.app
-open build/Elo.app        # launch as a background agent
+swift run          # from app/mac — builds & runs; press Ctrl-C or use menu → Quit
+```
+Good for UI, the hotkey, and logs. **Not** for Accessibility or launch-at-login —
+those need a real signed app bundle (see below).
+
+**Run as the real app (bundle):**
+```sh
+./build_app.sh && open build/Elo.app
 ```
 
-For development with live logs in the terminal:
-
-```sh
-./build_app.sh debug
-./build/Elo.app/Contents/MacOS/Elo
-```
-
-You can also open the package directly in Xcode (`File ▸ Open ▸ Package.swift`),
-though running from Xcode produces a differently-signed binary that may need the
-Accessibility permission re-granted — `build_app.sh` is the smoother path.
-
-> **Make the permission stick:** sign with a stable identity so the Accessibility
-> grant survives rebuilds. See *Troubleshooting → "It re-prompts every launch"*
-> below. Without it, every rebuild looks like a new app and re-prompts.
-
-### Grant permission (required)
-On first launch Elo asks for **Accessibility** access (only if it isn't already
-granted). Approve it in:
-
-`System Settings ▸ Privacy & Security ▸ Accessibility` → enable **Elo**.
-
-Accessibility is required to read selected text (Accessibility API) and to
-synthesize the ⌘C keystroke used by the hotkey's clipboard fallback. The check
-is idempotent: if the permission is already on, Elo stays silent and does **not**
-re-prompt on each launch. Re-check anytime from the menu-bar icon (✎) ▸ *Check
-Accessibility Permission…*.
-
-### Try it
-There are two ways to summon the menu:
-1. **Drag-select** across text in TextEdit, Notes, Mail, etc. (automatic), or
-2. Select text any way you like and press the **⌃⌘E** hotkey.
-
-The overlay menu then appears beside the selection.
-3. Click an action → check the log:
-
+**Watch logs** (when launched via `open`):
 ```sh
 log stream --predicate 'eventMessage CONTAINS "[Elo]"' --info
 ```
 
-Apps that don't expose selection over Accessibility (many browsers / Electron
-apps) won't auto-trigger — use the hotkey fallback **⌃⌘E** there.
+The app has no Dock icon; look for the ✎ icon in the menu bar (Settings / About /
+Quit). Default hotkey is **⌘⌥E** (logs a greeting for now).
 
 ---
 
-## How it works (Approach C — hybrid)
+## How the code is organized
 
-Two selection modalities, both implemented as `SelectionListener` subclasses, feed
-one handler that reads the selection and shows the overlay:
+One SwiftPM executable target, grouped by responsibility. What to expect in each
+folder:
 
-| Concern | Mouse modality | Hotkey modality |
-| --- | --- | --- |
-| **Detect** a selection | Global mouse monitor: drag-select (`MouseSelectionListener`) | Global hotkey ⌃⌘E (`HotkeyListener`) |
-| **Read** the text + bounds | Accessibility API: `kAXSelectedText…` (`SelectionReader`) | Accessibility, then synthesize ⌘C + read/restore pasteboard |
-| **Show** the menu | Non-activating `NSPanel` hosting SwiftUI (`OverlayPanel` / `OverlayMenuView`) | (same) |
+- **`App/`** — application entry point, wiring, and the menu-bar presence.
+- **`Common/`** — small app-wide utilities (constants, logging).
+- **`Model/`** — pure data types (no logic), including the persisted settings.
+- **`Persistence/`** — reads/writes the settings file.
+- **`Store/`** — the observable single source of truth for settings.
+- **`System/`** — thin wrappers over macOS OS integrations (hotkey, login item, permissions).
+- **`Screens/`** — all windows and their SwiftUI views (About, Settings).
 
-The automatic (mouse) path is **Accessibility-only on purpose**, so Elo never
-touches your clipboard behind your back. The clipboard fallback is reserved for
-the explicit hotkey trigger.
+### Files at a glance
 
-```
-mouse drag-up ──► MouseSelectionListener ─┐
-                                          ├─emit─► OverlayController ─► OverlayPanel (SwiftUI menu)
-hotkey ⌃⌘E ─────► HotkeyListener ─────────┘                          └─► action logged
-        (both subclass SelectionListener; both use SelectionReader)
-```
+**`App/`**
+- `main.swift` — entry point; runs the app as a background agent (`.accessory`, no Dock icon).
+- `AppDelegate.swift` — wires everything on launch: installs the main menu, the status-bar item, the settings store, and registers the global hotkey (re-registering when it changes). Owns the About/Settings windows.
+- `MainMenu.swift` — builds an (invisible) App + Edit menu so standard editing shortcuts work (see "Invisible main menu" below).
+- `MenuItem.swift` — a tiny declarative model for status-bar menu rows (title + handler, or a separator) backed by a closure-driven `NSMenuItem`.
+- `StatusItemController.swift` — the menu-bar ✎ item and its dropdown (Settings, About, Quit).
 
----
+**`Common/`**
+- `AppInfo.swift` — app name, bundle id, version, build, copyright — read from `Info.plist` with sensible fallbacks (so it also works under `swift run`).
+- `Log.swift` — global `log(_:)` that prefixes every line with `[Elo]`.
 
-## Major decisions
+**`Model/`**
+- `Hotkey.swift` — a shortcut (key code + modifiers + label); `Codable`/`Equatable`; renders as `⌘⌥E`; default is ⌘⌥E.
+- `Function.swift` — a writing action (`id`, `label`, `prompt`); `Codable`; ships the three defaults (Improve writing / Make Concise / Itemize); max 4.
+- `AppSettings.swift` — the whole persisted document: a `schemaVersion` plus an `application` section (`hotkey` + `functions`), with defaults.
 
-- **Native Swift (AppKit + SwiftUI), not Electron/Tauri/Flutter.** Every hard
-  capability Elo needs — reading selected text and bounds (Accessibility API),
-  global event monitoring (`NSEvent`/`CGEventTap`), a non-activating floating
-  overlay (`NSPanel`), and a background agent (`LSUIElement`/`NSStatusItem`) — is
-  a macOS-specific API. Cross-platform frameworks would still require native
-  bridge code for exactly these parts, while adding runtime weight that fights
-  the "lightweight, invisible until needed" goal. Cross-platform reuse also
-  doesn't apply: Windows uses entirely different APIs (UI Automation,
-  `SetWinEventHook`). Shared, portable logic belongs in `backend/` instead.
+**`Persistence/`**
+- `SettingsRepository.swift` — a protocol plus a file-backed implementation that loads/saves `elo.settings.json`, writes atomically off the main thread, and falls back to defaults if the file is missing or unreadable.
 
-- **Approach C (hybrid) over a single technique.** Pure Accessibility gives the
-  best UX (auto-trigger, precise placement) but has weak coverage in browsers /
-  Electron. Pure hotkey + clipboard is universal but invasive and imprecise.
-  Hybrid uses the best available method and degrades gracefully.
+**`Store/`**
+- `SettingsStore.swift` — `ObservableObject` that loads settings on init, **auto-saves on change (debounced)**, and exposes **granular publishers** (`hotkeyPublisher`, `functionsPublisher`) so services react only to the slice they care about.
 
-- **Background agent (`LSUIElement = true`) + menu-bar item.** No Dock icon, no
-  main window — the app is invisible until a selection summons the overlay.
+**`System/`**
+- `HotkeyManager.swift` — registers a global hotkey via Carbon `RegisterEventHotKey` (no permission needed) and calls a handler; maps AppKit modifiers to Carbon internally.
+- `LaunchAtLoginManager.swift` — wraps `SMAppService` (`isEnabled` / `setEnabled`) to add/remove Elo as a login item.
+- `AccessibilityManager.swift` — the Accessibility (TCC) permission: live `isTrusted` and a `requestAccess()` that registers Elo and opens the system prompt.
 
-- **Non-activating `NSPanel`.** Lets the overlay receive clicks without stealing
-  focus, so the user's text selection in the source app is preserved.
+**`Screens/`**
+- `AppWindowController.swift` — base class for auxiliary windows: builds lazily, sizes to its SwiftUI content, centers on screen, and brings the app forward. About/Settings subclass it and just supply a title + content.
+- `About/AboutView.swift` — the About screen (name, version, copyright).
+- `About/AboutWindowController.swift` — the About window.
+- `Settings/SettingsWindowController.swift` — the Settings window; injects the settings store into the UI.
+- `Settings/SettingsView.swift` — the tabbed container (**Application** | **AI Models**).
+- `Settings/ApplicationSettingsView.swift` — the Application tab (General / Hotkey / Functions / Accessibility) plus the function row and the modal function editor.
+- `Settings/HotkeyRecorderView.swift` — a small control that records a key combination.
+- `Settings/AIModelsSettingsView.swift` — placeholder tab (empty for now).
 
-- **SwiftUI inside `NSHostingView`.** AppKit owns the panel mechanics; SwiftUI
-  builds the menu — fast iteration on UI without giving up window control.
-
-- **SwiftPM + `build_app.sh` instead of a committed `.xcodeproj`.** Builds from
-  the command line with no generated project to maintain. The script signs with a
-  stable identity (`Elo Dev`) when available so the Accessibility (TCC) grant
-  survives rebuilds, falling back to ad-hoc with a warning otherwise. Opening
-  `Package.swift` in Xcode still works for those who prefer the IDE.
-
-- **Carbon `RegisterEventHotKey` for the hotkey.** Zero third-party dependencies
-  for the prototype; can be swapped for a configurable shortcut library later.
-
-- **`SelectionListener` abstract base.** Both modalities subclass it and override
-  `start()`/`stop()`, then call `emit(_:)` to surface a selection through one
-  shared handler. Adding a new trigger later means adding one subclass.
-
-- **Idempotent permission check.** `AccessibilityManager.requestAccessIfNeeded()`
-  prompts only when the permission is actually missing, so granted users are
-  never nagged on launch.
-
-- **Files grouped by responsibility** (`App/`, `Permissions/`, `Selection/`,
-  `Listeners/`, `Overlay/`) rather than a flat folder.
+**Project files**
+- `Package.swift` — the SwiftPM target (macOS 13+).
+- `Resources/Info.plist` — bundle metadata (`LSUIElement`, bundle id, version, …).
+- `build_app.sh` — builds and assembles `build/Elo.app`, code-signing with a stable identity when available (see Troubleshooting).
 
 ---
 
-## Project layout
+## The settings module
+
+Settings flow through four clean layers, so the UI stays declarative and there's a
+single source of truth.
 
 ```
-app/mac/
-├── Package.swift              # SwiftPM executable target (macOS 13+)
-├── build_app.sh              # build + assemble + ad-hoc sign Elo.app
-├── Resources/Info.plist      # bundle metadata (LSUIElement, bundle id, …)
-└── Sources/Elo/
-    ├── App/
-    │   ├── main.swift               # entry point; sets .accessory activation policy
-    │   ├── AppDelegate.swift        # wires listeners + overlay together
-    │   └── StatusItemController.swift # menu-bar item (permission check, quit)
-    ├── Permissions/
-    │   └── AccessibilityManager.swift # idempotent TCC permission check/prompt
-    ├── Listeners/
-    │   ├── SelectionListener.swift      # abstract base (start/stop/emit)
-    │   ├── MouseSelectionListener.swift # drag-select detection (AX-only)
-    │   └── HotkeyListener.swift         # ⌃⌘E hotkey (AX + clipboard fallback)
-    ├── Selection/
-    │   └── SelectionReader.swift    # AX read + clipboard fallback (text + bounds)
-    └── Overlay/
-        ├── OverlayController.swift  # overlay lifecycle + action logging
-        ├── OverlayPanel.swift       # non-activating NSPanel + positioning
-        └── OverlayMenuView.swift    # SwiftUI menu (Make concise / Improve Writing)
+elo.settings.json  ⇄  SettingsRepository  ⇄  SettingsStore  ⇄  UI (fragment bindings)
+     (file)              (load/save)          (@Published)      $store.settings.application.…
 ```
+
+1. **Model** (`AppSettings`) — plain `Codable` value types that mirror the file.
+2. **Repository** (`SettingsRepository`) — the only thing that touches the file. Loads on launch (defaults if missing/corrupt) and saves atomically in the background.
+3. **Store** (`SettingsStore`) — holds the decoded document as `@Published settings`, auto-saves on any change (debounced ~0.5s), and materializes the file on first launch. Exposes per-slice publishers.
+4. **UI** — each control binds to **its own fragment** of the document, e.g. the recorder binds to `$store.settings.application.hotkey` and the Functions list edits `store.settings.application.functions`. Editing a fragment mutates the document → the store persists the whole file. **Many fragment editors, one file writer** (the store), which avoids multiple writers clobbering the file.
+
+Services observe slices too: `AppDelegate` subscribes to `hotkeyPublisher` and
+re-registers the global hotkey whenever it changes.
+
+**What is (and isn't) persisted.** Only user data lives in the file — the
+**hotkey** and **functions**. **Launch-at-login** and **Accessibility** are *live
+OS state* (owned by `SMAppService` and TCC); persisting a copy would drift from
+reality, so those are always read fresh from their managers and re-checked when
+the Settings window opens.
+
+The file lives at `~/Library/Application Support/Elo/elo.settings.json` and is
+pretty-printed so it's easy to read, diff, and share.
 
 ---
 
-## Known limitations (prototype)
+## Invisible main menu (editing shortcuts)
 
-- Actions only log; no LLM/backend call yet (hook in `OverlayController.handle`).
-- Web/Electron apps often don't expose selection over Accessibility → rely on the
-  ⌃⌘E hotkey there. A browser extension (Approach D) is the long-term fix for web.
-- The drag-select heuristic can occasionally trigger on drag-scrolls; tuning the
-  threshold / gesture detection is future work. (Selection is now limited to the
-  two intended modalities: drag-select and the ⌃⌘E hotkey.)
-- Selection-bounds placement assumes the primary screen origin; multi-display
-  edge cases may need refinement.
-- Not sandboxed and only ad-hoc signed — fine for local dev, not for
-  distribution. Notarization / Developer ID signing comes later.
+A background agent has no menu bar, but macOS still routes the standard editing
+shortcuts (⌘X/⌘C/⌘V/⌘A, ⌘Z/⇧⌘Z) through the app's **main menu** to the focused
+text field. With no main menu, copy/paste silently do nothing in text areas.
 
-## Troubleshooting
+`MainMenu.install()` (called at launch) builds a minimal App + **Edit** menu so
+those shortcuts work in the Settings fields — even though the menu bar itself is
+never shown. It also adds ⌘Q to quit.
 
-### "It re-prompts for Accessibility every launch"
-macOS pins the Accessibility grant to the app's **code signature**. An ad-hoc
-signature changes on every rebuild, so each build looks like a new app and the
-old grant (which still shows as ON in System Settings) no longer applies.
+---
 
-Fix it once by signing with a stable, self-signed identity:
+## Key decisions
 
-1. **Create a code-signing certificate** (one time):
-   Keychain Access ▸ *Certificate Assistant* ▸ *Create a Certificate…*
-   - Name: `Elo Dev`
-   - Identity Type: *Self Signed Root*
-   - Certificate Type: *Code Signing*
-2. **Clear the stale grant** so macOS prompts cleanly once more:
-   ```sh
-   tccutil reset Accessibility com.tku.elo
-   ```
-   (Or remove the old `Elo` row in System Settings ▸ Privacy & Security ▸
-   Accessibility with the `–` button.)
-3. **Rebuild and run** — `build_app.sh` now auto-detects `Elo Dev`:
+- **Native Swift (AppKit + SwiftUI).** Everything Elo needs — a background agent, global hotkey, permissions, on-screen overlay later — is macOS-specific. Cross-platform frameworks would still require native bridge code for exactly these parts. Portable logic (LLM calls) will live in `backend/`.
+- **Background agent (`LSUIElement`) + menu-bar item.** No Dock icon or main window; invisible until needed.
+- **Windows via a shared `AppWindowController`.** One place owns lazy creation, size-to-content, centering, and focus; each screen just supplies title + content.
+- **Global hotkey via Carbon `RegisterEventHotKey`.** Works app-wide with no permission and no third-party dependency.
+- **Own hotkey recorder instead of a library.** The popular `KeyboardShortcuts` library can't build here (its `#Preview` macro needs full Xcode; this environment has Command Line Tools only), so we built a small recorder.
+- **Live OS state is never persisted.** Launch-at-login and Accessibility are read live and re-checked on window focus (macOS sends no change notification).
+- **Settings auto-save (no Save button).** The macOS convention; the function editor's Save just commits its fragment into the store, which persists.
+
+---
+
+## Permissions & signing (important)
+
+macOS ties the **Accessibility** grant (and, in practice, launch-at-login
+behavior) to the app's **code signature**. An **ad-hoc** signature changes on
+every rebuild, so each build looks like a brand-new app: the grant won't stick and
+you'll be re-prompted / see the toggle not take effect.
+
+Fix it once with a stable self-signed identity:
+
+1. **Keychain Access ▸ Certificate Assistant ▸ Create a Certificate…**
+   - Name: `Elo Dev`, Identity Type: *Self Signed Root*, Certificate Type: *Code Signing*
+2. Clear any stale grant: `tccutil reset Accessibility com.tku.elo`
+3. Rebuild & run — `build_app.sh` auto-detects `Elo Dev`:
    ```sh
    ./build_app.sh && open build/Elo.app
    ```
-   Grant access once. Subsequent rebuilds keep the same identity, so it sticks.
+   (Override the cert name with `ELO_SIGN_IDENTITY="My Cert" ./build_app.sh`.)
 
-Use a different certificate name via `ELO_SIGN_IDENTITY="My Cert" ./build_app.sh`.
+Also note: **Accessibility and launch-at-login only work from the `.app` bundle**,
+not `swift run` — a bare binary has no bundle identity for macOS to register.
 
-Also make sure you launch the **bundle** (`build/Elo.app`), not the bare binary
-(`swift run` / `.build/.../Elo`) — the bare binary has a different identity and
-won't be covered by the grant.
+---
 
-## Next steps
+## Not built yet / next steps
 
-1. Validate Accessibility coverage across your real target apps.
-2. Replace the logging in `OverlayController.handle` with a call to `backend/`.
-3. Add an outside-the-AX clipboard-restore safety pass and richer gesture tuning.
-4. Consider a browser extension for first-class web support.
+- **Text selection + overlay** — the core "select text → floating menu" UX.
+- **AI Models tab** — currently empty; API keys will go in the Keychain, not the settings file.
+- **Backend** — the LLM calls (separate `backend/` folder, empty for now).
+- **Windows app** — separate native client later (`app/win/`, empty for now).
