@@ -11,11 +11,19 @@ struct ActionMenuView: View {
     let onSelect: (Function) -> Void
 
     private let cornerRadius: CGFloat = 16
+    @State private var isVisible = false
 
     var body: some View {
         optionsContainer
             .padding(8)
             .fixedSize()
+            .scaleEffect(isVisible ? 1 : 0.95, anchor: .top)
+            .opacity(isVisible ? 1 : 0)
+            .onAppear {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.72)) {
+                    isVisible = true
+                }
+            }
     }
 
     private var optionsContainer: some View {
