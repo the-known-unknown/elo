@@ -39,6 +39,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .store(in: &cancellables)
 
         log("Launched. Accessibility trusted: \(AccessibilityManager.isTrusted).")
+
+        // Elo can't read selected text without Accessibility, so prompt for it
+        // on launch if it hasn't been granted yet.
+        if !AccessibilityManager.isTrusted {
+            AccessibilityManager.requestAccess()
+        }
     }
 
     // MARK: - Hotkey / action menu

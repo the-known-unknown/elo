@@ -5,7 +5,7 @@ BUNDLE     := build/$(APP_NAME).app
 BUNDLE_ID  := com.tku.elo
 LOG_FILTER := 'eventMessage CONTAINS "[Elo]"'
 
-.PHONY: help build run go fresh dev run-logs logs history reset check-cert sig clean
+.PHONY: help build run go fresh dev run-logs logs history logs-recent reset check-cert sig clean
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -32,6 +32,9 @@ logs: ## Stream Elo logs live (Ctrl-C to stop)
 
 history: ## Show Elo logs from the last 5 minutes
 	log show --predicate $(LOG_FILTER) --info --last 5m
+
+logs-recent: ## Show Elo logs from the last 10 minutes
+	log show --predicate $(LOG_FILTER) --info --last 10m
 
 reset: ## Reset the Accessibility permission (forces a fresh grant)
 	tccutil reset Accessibility $(BUNDLE_ID)
