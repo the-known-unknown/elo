@@ -4,13 +4,11 @@ import SwiftUI
 
 /// The "Application" settings tab.
 ///
-/// UI only for now: everything is backed by local `@State` and stubbed actions.
-/// Persistence, the real hotkey recorder, and live permission status will be
-/// wired in later steps.
+/// Persisted settings (hotkey, functions) flow through `settingsStore`.
+/// Launch-at-login and Accessibility are live OS state, read from their managers.
 struct ApplicationSettingsView: View {
-    /// Shared source of truth for the invocation hotkey (also observed by the app
-    /// to re-register the global shortcut when it changes).
-    @ObservedObject var hotkeyStore: HotkeyStore
+    /// Single source of truth for persisted settings (hotkey + functions).
+    @ObservedObject var settingsStore: SettingsStore
 
     /// Mirrors the real login-item state; explicitly hydrated from
     /// `LaunchAtLoginManager` on open and after each change.
@@ -18,10 +16,9 @@ struct ApplicationSettingsView: View {
 
     /// Live Accessibility permission status (re-hydrated when the window opens).
     @State private var accessibilityGranted = AccessibilityManager.isTrusted
-    @State private var functions: [FunctionItem] = FunctionItem.defaults
 
     /// The function currently being edited (drives the modal editor).
-    @State private var editingFunction: FunctionItem?
+    @State private var editingFunction: Function?
 
     var body: some View {
         Form {
@@ -84,7 +81,7 @@ struct ApplicationSettingsView: View {
     private var hotkeySection: some View {
         Section {
             LabeledContent("Invoke Elo") {
-                HotkeyRecorderView(hotkey: $hotkeyStore.hotkey)
+                HotkeyRecorderView(hotkey: $settingsStore.settings.application.hotkey)
             }
         } header: {
             Text("Hotkey")
@@ -101,7 +98,7 @@ struct ApplicationSettingsView: View {
                 }
             }
 
-            if functions.count < FunctionItem.maxCount {
+            if functions.count < Function.maxCount {
                 Button(action: addFunction) {
                     Label("Add function", systemImage: "plus")
                 }
@@ -109,20 +106,27 @@ struct ApplicationSettingsView: View {
         } header: {
             Text("Functions")
         } footer: {
-            Text("Up to \(FunctionItem.maxCount) functions appear in the Elo menu.")
+            Text("Up to \(Function.maxCount) functions appear in the Elo menu.")
         }
     }
 
+    /// The persisted functions (lives in the settings store).
+    private var functions: [Function] {
+        settingsStore.settings.application.functions
+    }
+
     private func addFunction() {
-        let new = FunctionItem.empty()
-        functions.append(new)
+        let new = Function.empty()
+        settingsStore.settings.application.functions.append(new)
         editingFunction = new
     }
 
-    /// Writes an edited function back into the list (matched by id) and closes the editor.
-    private func save(_ function: FunctionItem) {
-        if let index = functions.firstIndex(where: { $0.id == function.id }) {
-            functions[index] = function
+    /// Writes an edited function back into the store (matched by id) and closes the editor.
+    private func save(_ function: Function) {
+        if let index = settingsStore.settings.application.functions.firstIndex(where: {
+            $0.id == function.id
+        }) {
+            settingsStore.settings.application.functions[index] = function
         }
         editingFunction = nil
     }
@@ -159,7 +163,7 @@ struct ApplicationSettingsView: View {
 /// The whole row is tappable and opens the editor.
 private struct FunctionRowView: View {
     let number: Int
-    let function: FunctionItem
+    let function: Function
     let onSelect: () -> Void
 
     var body: some View {
@@ -202,13 +206,21 @@ private struct FunctionEditorView: View {
     @State private var label: String
     @State private var prompt: String
 
-    private let original: FunctionItem
-    private let onSave: (FunctionItem) -> Void
+    private let original: Function
+    private let onSave: (Function) -> Void
     private let onCancel: () -> Void
 
+    private let maxWords = 1000
+
+    private var wordCount: Int {
+        prompt.split(whereSeparator: { $0.isWhitespace }).count
+    }
+
+    private var isOverLimit: Bool { wordCount > maxWords }
+
     init(
-        function: FunctionItem,
-        onSave: @escaping (FunctionItem) -> Void,
+        function: Function,
+        onSave: @escaping (Function) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.original = function
@@ -234,8 +246,13 @@ private struct FunctionEditorView: View {
                     .padding(4)
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
-                            .stroke(.quaternary, lineWidth: 1)
+                            .stroke(
+                                isOverLimit ? Color.red : Color(.quaternaryLabelColor), lineWidth: 1
+                            )
                     )
+                Text("\(wordCount) / \(maxWords) words")
+                    .font(.caption)
+                    .foregroundStyle(isOverLimit ? Color.red : Color.secondary)
             }
 
             HStack {
@@ -250,42 +267,10 @@ private struct FunctionEditorView: View {
                 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
+                .disabled(isOverLimit)
             }
         }
         .padding(20)
-        .frame(width: 460, height: 380)
+        .frame(width: 460, height: 400)
     }
-}
-
-// MARK: - UI-local model
-
-/// Lightweight, UI-only model for a function. Will be replaced by the persisted
-/// settings model in a later step.
-private struct FunctionItem: Identifiable {
-    let id = UUID()
-    var label: String
-    var prompt: String
-
-    static let maxCount = 4
-
-    static func empty() -> FunctionItem {
-        FunctionItem(label: "", prompt: "")
-    }
-
-    static let defaults: [FunctionItem] = [
-        FunctionItem(
-            label: "Improve writing",
-            prompt:
-                "Can you improve this text, fix typos and improve the grammar to make it sound more polished?"
-        ),
-        FunctionItem(
-            label: "Make Concise",
-            prompt: "Make this text more concise, without losing important detail"
-        ),
-        FunctionItem(
-            label: "Itemize",
-            prompt:
-                "I would like you to rewrite this text as a simple bulleted list, without losing important detail. Ensure each bullet is concise. Feel free to organize this into a group of categories with sub-bullets in each (if applicable)"
-        ),
-    ]
 }

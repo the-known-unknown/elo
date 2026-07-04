@@ -6,8 +6,9 @@ import Combine
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItemController: StatusItemController!
     private let aboutWindowController = AboutWindowController()
-    private let hotkeyStore = HotkeyStore()
-    private lazy var settingsWindowController = SettingsWindowController(hotkeyStore: hotkeyStore)
+    private let settingsStore = SettingsStore()
+    private lazy var settingsWindowController = SettingsWindowController(
+        settingsStore: settingsStore)
 
     private lazy var hotkeyManager = HotkeyManager { [weak self] in
         self?.handleHotkey()
@@ -15,6 +16,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Provides standard editing shortcuts (copy/paste/etc.) in text fields.
+        MainMenu.install()
+
         statusItemController = StatusItemController(
             onSettings: handleSettings,
             onAbout: handleAbout,
@@ -22,8 +26,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         // Register the global hotkey now, and re-register whenever it changes.
-        // (`$hotkey` emits its current value immediately on subscription.)
-        hotkeyStore.$hotkey
+        // (The publisher emits its current value immediately on subscription.)
+        settingsStore.hotkeyPublisher
             .sink { [weak self] hotkey in
                 self?.hotkeyManager.register(
                     keyCode: hotkey.keyCode, modifierFlags: hotkey.modifierFlags)
