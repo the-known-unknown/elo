@@ -13,8 +13,11 @@ import ApplicationServices
 /// modifier keys to be released — synthesizing ⌘C while ⌘/⌥ are still physically
 /// held makes the system see ⌘⌥C (not Copy), so the copy silently fails.
 enum SelectionReader {
+    /// Minimum number of (trimmed) characters for a selection to be considered valid.
+    private static let minimumSelectionLength = 6
+
     /// Copies the current selection and returns it on the main queue, or `nil` if
-    /// nothing was copied (no selection, or the copy was blocked).
+    /// nothing usable was copied (no selection, blocked, or too short).
     static func copySelection(completion: @escaping (Selection?) -> Void) {
         waitForModifiersToClear {
             completion(performCopy())
@@ -70,11 +73,13 @@ enum SelectionReader {
         let copied = pasteboard.string(forType: .string)
         restore(pasteboard, items: saved)
 
-        guard let copied, !copied.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        // Trim surrounding whitespace/newlines and require a meaningful amount of text.
+        let trimmed = (copied ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= minimumSelectionLength else {
             return nil
         }
         // Query editability while the source app is still frontmost.
-        return Selection(text: copied, isEditable: selectionIsReplaceable())
+        return Selection(text: trimmed, isEditable: selectionIsReplaceable())
     }
 
     // MARK: - Editability
