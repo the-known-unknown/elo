@@ -8,6 +8,7 @@ final class ActionMenuController {
 
     private var panel: ActionMenuPanel?
     private var dismissMonitor: Any?
+    private var appSwitchObserver: NSObjectProtocol?
 
     init(onSelect: @escaping (Function, Selection?) -> Void) {
         self.onSelect = onSelect
@@ -38,6 +39,10 @@ final class ActionMenuController {
         if let dismissMonitor {
             NSEvent.removeMonitor(dismissMonitor)
             self.dismissMonitor = nil
+        }
+        if let appSwitchObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(appSwitchObserver)
+            self.appSwitchObserver = nil
         }
     }
 
@@ -74,6 +79,16 @@ final class ActionMenuController {
             default:
                 break
             }
+        }
+
+        // Also dismiss when the user switches to another app, so a stale menu
+        // doesn't linger over a different app than the one it was captured from.
+        appSwitchObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.dismiss()
         }
     }
 }

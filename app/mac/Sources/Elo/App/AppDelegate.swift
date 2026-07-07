@@ -95,8 +95,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
 
+            let sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName ?? "unknown"
             log(
-                "Hotkey pressed. Selection: \(preview(selection.text)) (editable: \(selection.isEditable))."
+                "Hotkey pressed. Source app: \(sourceApp) | editable: \(selection.isEditable) | text: \(preview(selection.text))"
             )
             actionMenuController.show(
                 functions: settingsStore.settings.application.functions,
