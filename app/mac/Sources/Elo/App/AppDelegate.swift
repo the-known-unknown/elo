@@ -14,8 +14,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self?.handleHotkey()
     }
     private lazy var actionMenuController = ActionMenuController {
-        [weak self] function, selectedText in
-        self?.handleFunctionSelected(function, selectedText: selectedText)
+        [weak self] function, selection in
+        self?.handleFunctionSelected(function, selection: selection)
     }
     private var cancellables = Set<AnyCancellable>()
 
@@ -52,18 +52,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleHotkey() {
         // Capture the selection while the source app is still frontmost (this waits
         // for the hotkey modifiers to release first), then show the function menu.
-        SelectionReader.copySelectedText { [weak self] selectedText in
+        SelectionReader.copySelection { [weak self] selection in
             guard let self else { return }
-            log("Hotkey pressed. Selected text: \(preview(selectedText)).")
             actionMenuController.show(
                 functions: settingsStore.settings.application.functions,
-                selectedText: selectedText
+                selection: selection
             )
         }
     }
 
-    private func handleFunctionSelected(_ function: Function, selectedText: String?) {
-        log("Function \"\(function.label)\" chosen. Text: \(preview(selectedText)).")
+    private func handleFunctionSelected(_ function: Function, selection: Selection?) {
+        log(
+            "Function \"\(function.label)\" chosen | editable=\(selection?.isEditable ?? false) | text: \(preview(selection?.text))."
+        )
     }
 
     private func preview(_ text: String?) -> String {

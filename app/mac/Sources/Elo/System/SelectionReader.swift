@@ -1,6 +1,8 @@
 import AppKit
+import ApplicationServices
 
-/// Reads the user's currently selected text from whatever app is frontmost.
+/// Reads the user's currently selected text (and whether it's editable) from
+/// whatever app is frontmost.
 ///
 /// Strategy: synthesize ⌘C, read the general pasteboard, then restore its previous
 /// contents so we don't clobber the user's clipboard. Universal (native apps,
@@ -13,7 +15,7 @@ import AppKit
 enum SelectionReader {
     /// Copies the current selection and returns it on the main queue, or `nil` if
     /// nothing was copied (no selection, or the copy was blocked).
-    static func copySelectedText(completion: @escaping (String?) -> Void) {
+    static func copySelection(completion: @escaping (Selection?) -> Void) {
         waitForModifiersToClear {
             completion(performCopy())
         }
@@ -42,7 +44,7 @@ enum SelectionReader {
 
     // MARK: - Copy
 
-    private static func performCopy() -> String? {
+    private static func performCopy() -> Selection? {
         let pasteboard = NSPasteboard.general
         let saved = snapshot(pasteboard)
         let previousChangeCount = pasteboard.changeCount
@@ -68,9 +70,43 @@ enum SelectionReader {
         let copied = pasteboard.string(forType: .string)
         restore(pasteboard, items: saved)
 
-        let trimmed = copied?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return (trimmed?.isEmpty ?? true) ? nil : copied
+        guard let copied, !copied.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        // Query editability while the source app is still frontmost.
+        return Selection(text: copied, isEditable: selectionIsReplaceable())
     }
+
+    // MARK: - Editability
+
+    /// Whether the focused element's selected text can be set via Accessibility —
+    /// a strong signal the selection lives in an editable input we can write back to.
+    private static func selectionIsReplaceable() -> Bool {
+        guard AXIsProcessTrusted() else { return false }
+
+        let systemWide = AXUIElementCreateSystemWide()
+        var focused: AnyObject?
+        guard
+            AXUIElementCopyAttributeValue(
+                systemWide, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
+            let focused
+        else { return false }
+
+        let element = focused as! AXUIElement
+        // Either signal indicates an editable field we can write back to. Note this
+        // is still best-effort: editors that don't expose these AX attributes
+        // (Electron apps, custom-rendered editors) will report false negatives.
+        return isSettable(element, kAXSelectedTextAttribute)
+            || isSettable(element, kAXValueAttribute)
+    }
+
+    private static func isSettable(_ element: AXUIElement, _ attribute: String) -> Bool {
+        var settable: DarwinBoolean = false
+        let status = AXUIElementIsAttributeSettable(element, attribute as CFString, &settable)
+        return status == .success && settable.boolValue
+    }
+
+    // MARK: - Keystroke
 
     private static func synthesizeCommandC() {
         let source = CGEventSource(stateID: .combinedSessionState)

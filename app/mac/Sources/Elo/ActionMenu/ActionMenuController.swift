@@ -3,23 +3,23 @@ import AppKit
 /// Shows the action overlay — a custom floating panel listing the functions the
 /// user can run on the current selection. Triggered by the global hotkey.
 final class ActionMenuController {
-    /// Called with the chosen function and the text selected when the menu opened.
-    private let onSelect: (Function, String?) -> Void
+    /// Called with the chosen function and the selection captured when the menu opened.
+    private let onSelect: (Function, Selection?) -> Void
 
     private var panel: ActionMenuPanel?
     private var dismissMonitor: Any?
 
-    init(onSelect: @escaping (Function, String?) -> Void) {
+    init(onSelect: @escaping (Function, Selection?) -> Void) {
         self.onSelect = onSelect
     }
 
-    func show(functions: [Function], selectedText: String?) {
+    func show(functions: [Function], selection: Selection?) {
         dismiss()
 
         let view = ActionMenuView(
             functions: functions,
             onSelect: { [weak self] function in
-                self?.onSelect(function, selectedText)
+                self?.onSelect(function, selection)
                 self?.dismiss()
             }
         )
