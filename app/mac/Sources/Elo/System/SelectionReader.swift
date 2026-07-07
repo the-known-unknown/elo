@@ -61,7 +61,7 @@ enum SelectionReader {
             // The copy never registered — no selection, or the keystroke was
             // blocked (e.g. Accessibility not granted). Don't return stale text.
             log(
-                "SelectionReader: copy did not register (accessibility trusted: \(AccessibilityManager.isTrusted); no selection, or keystroke blocked)."
+                "SelectionReader: copy did not register (accessibility: \(AccessibilityManager.isTrusted))."
             )
             restore(pasteboard, items: saved)
             return nil
