@@ -15,6 +15,7 @@ struct ToastView: View {
     let message: String
     var actionTitle: String? = nil
     var onAction: (() -> Void)? = nil
+    var onClose: (() -> Void)? = nil
 
     var body: some View {
         VStack {
@@ -39,6 +40,19 @@ struct ToastView: View {
                 Button(actionTitle) { onAction?() }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
+            }
+
+            if let onClose {
+                Button(action: onClose) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .symbolRenderingMode(.palette)
+                        // White X on a translucent dark circle so both the mark
+                        // and the circle stay visible over the toast background.
+                        .foregroundStyle(Color.white, Color.black.opacity(0.45))
+                }
+                .buttonStyle(.plain)
+                .help("Dismiss")
             }
         }
         .fixedSize()

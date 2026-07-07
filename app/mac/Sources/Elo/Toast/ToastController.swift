@@ -29,9 +29,11 @@ final class ToastController {
                 : { [weak self] in
                     onAction?()
                     self?.hide()
-                }
+                },
+            onClose: { [weak self] in self?.hide() }
         )
-        let panel = ToastPanel(content: view, size: panelSize, interactive: actionTitle != nil)
+        // Always interactive now — the close button needs to receive clicks.
+        let panel = ToastPanel(content: view, size: panelSize, interactive: true)
         position(panel)
         panel.orderFrontRegardless()
         self.model = model
