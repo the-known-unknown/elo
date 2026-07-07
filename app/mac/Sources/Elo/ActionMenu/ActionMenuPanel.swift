@@ -30,6 +30,8 @@ final class ActionMenuPanel: NSPanel {
         setContentSize(hosting.fittingSize)
     }
 
-    override var canBecomeKey: Bool { false }
+    // Becomes key (without activating the app, thanks to `.nonactivatingPanel`) so
+    // it can receive arrow/Return/Escape keys for menu navigation.
+    override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 }

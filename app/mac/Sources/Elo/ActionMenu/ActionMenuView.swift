@@ -1,4 +1,12 @@
+import Combine
 import SwiftUI
+
+/// Drives the keyboard-highlighted row so the controller can move the selection
+/// with the arrow keys.
+final class ActionMenuModel: ObservableObject {
+    /// Index of the keyboard-highlighted row (`nil` until the user presses a key).
+    @Published var selectedIndex: Int?
+}
 
 /// The custom action overlay: a single rounded container listing the functions,
 /// separated by hairline dividers.
@@ -8,6 +16,7 @@ import SwiftUI
 /// available here; the layout/corners are kept so it can be swapped in later.)
 struct ActionMenuView: View {
     let functions: [Function]
+    @ObservedObject var model: ActionMenuModel
     let onSelect: (Function) -> Void
 
     private let cornerRadius: CGFloat = 16
@@ -41,6 +50,7 @@ struct ActionMenuView: View {
                         label: function.label.isEmpty ? "Untitled" : function.label,
                         position: .at(index: index, count: functions.count),
                         cornerRadius: cornerRadius,
+                        isSelected: model.selectedIndex == index,
                         action: { onSelect(function) }
                     )
                 }
@@ -58,8 +68,8 @@ struct ActionMenuView: View {
     }
 }
 
-/// Where a row sits in the list, so its hover highlight can round the matching
-/// outer corners (first: top, last: bottom, only: both, middle: none).
+/// Where a row sits in the list, so its highlight can round the matching outer
+/// corners (first: top, last: bottom, only: both, middle: none).
 private enum RowPosition {
     case first, middle, last, only
 
@@ -74,14 +84,18 @@ private enum RowPosition {
     var roundsBottom: Bool { self == .last || self == .only }
 }
 
-/// A single selectable row. On hover it takes the macOS menu look — an
-/// accent-colored background with white text — with corners matching the container.
+/// A single selectable row. When hovered or keyboard-selected it takes the macOS
+/// menu look — an accent background with white text — with corners matching the
+/// container.
 private struct OptionRow: View {
     let label: String
     let position: RowPosition
     let cornerRadius: CGFloat
+    var isSelected: Bool = false
     let action: (() -> Void)?
     @State private var isHovering = false
+
+    private var isActive: Bool { action != nil && (isHovering || isSelected) }
 
     var body: some View {
         Button(action: { action?() }) {
@@ -91,7 +105,7 @@ private struct OptionRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 18)
                 .padding(.vertical, 13)
-                .background(highlightShape.fill(isHovering ? Color.accentColor : Color.clear))
+                .background(highlightShape.fill(isActive ? Color.accentColor : Color.clear))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -100,7 +114,7 @@ private struct OptionRow: View {
     }
 
     private var textColor: Color {
-        if isHovering { return .white }
+        if isActive { return .white }
         return action == nil ? .secondary : .primary
     }
 
