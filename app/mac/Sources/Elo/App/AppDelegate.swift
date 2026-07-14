@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self?.handleFunctionSelected(function, selection: selection)
     }
     private let toastController = ToastController()
+    private let rewriteController = RewriteController()
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -107,9 +108,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleFunctionSelected(_ function: Function, selection: Selection?) {
+        guard let selection else { return }
         log(
-            "Function \"\(function.label)\" chosen | editable=\(selection?.isEditable ?? false) | text: \(preview(selection?.text))."
+            "Function \"\(function.label)\" chosen | starting rewrite | text: \(preview(selection.text))"
         )
+        rewriteController.start(action: function, input: selection.text)
     }
 
     private func preview(_ text: String?) -> String {

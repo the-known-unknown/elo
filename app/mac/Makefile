@@ -3,9 +3,9 @@
 APP_NAME   := Elo
 BUNDLE     := build/$(APP_NAME).app
 BUNDLE_ID  := com.tku.elo
-LOG_FILTER := 'eventMessage CONTAINS "[Elo]"'
+LOG_FILE   := $(HOME)/Library/Logs/Elo/elo.log
 
-.PHONY: help build run go fresh dev run-logs logs history logs-recent reset check-cert sig clean
+.PHONY: help build run go fresh dev run-logs logs logs-recent logs-clear reset check-cert sig clean
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -27,14 +27,16 @@ dev: ## Fast run via `swift run` — logs inline, but NOT for Accessibility feat
 run-logs: build ## Build + run the bundle binary in this terminal (logs inline + real bundle identity)
 	"$(BUNDLE)/Contents/MacOS/$(APP_NAME)"
 
-logs: ## Stream Elo logs live (Ctrl-C to stop)
-	log stream --predicate $(LOG_FILTER) --info
+logs: ## Tail the Elo log file live (Ctrl-C to stop)
+	@mkdir -p "$(dir $(LOG_FILE))" && touch "$(LOG_FILE)"
+	tail -f "$(LOG_FILE)"
 
-history: ## Show Elo logs from the last 5 minutes
-	log show --predicate $(LOG_FILTER) --info --last 5m
+logs-recent: ## Show the last 100 lines of the Elo log file
+	@mkdir -p "$(dir $(LOG_FILE))" && touch "$(LOG_FILE)"
+	tail -n 100 "$(LOG_FILE)"
 
-logs-recent: ## Show Elo logs from the last 10 minutes
-	log show --predicate $(LOG_FILTER) --info --last 10m
+logs-clear: ## Empty the Elo log file
+	@: > "$(LOG_FILE)" && echo "Cleared $(LOG_FILE)"
 
 reset: ## Reset the Accessibility permission (forces a fresh grant)
 	tccutil reset Accessibility $(BUNDLE_ID)
