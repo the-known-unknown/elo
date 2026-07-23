@@ -5,7 +5,7 @@ BUNDLE     := build/$(APP_NAME).app
 BUNDLE_ID  := com.tku.elo
 LOG_FILE   := $(HOME)/Library/Logs/Elo/elo.log
 
-.PHONY: help build run go fresh dev run-logs go-logs logs logs-recent logs-clear reset check-cert sig clean
+.PHONY: help build run go fresh dev run-logs logs logs-recent logs-clear reset check-cert sig clean
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -18,8 +18,6 @@ run: ## Launch the built bundle (background agent)
 	open "$(BUNDLE)"
 
 go: build run ## Build, then launch
-
-go-logs: build run logs ## Build, launch (detached), then tail logs live
 
 fresh: reset build run ## Reset Accessibility, rebuild, and launch (clean slate)
 

@@ -22,11 +22,20 @@ final class StatusItemController {
         self.onAbout = onAbout
         self.onQuit = onQuit
 
-        statusItem.button?.image = NSImage(
-            systemSymbolName: "pencil.and.scribble",
-            accessibilityDescription: AppInfo.name)
-        statusItem.button?.image?.isTemplate = true
+        statusItem.button?.image = Self.menuBarIcon
         rebuildMenu()
+    }
+
+    /// The status-bar glyph. Prefers the bundled custom icon (`MenuBarIcon.png` /
+    /// `MenuBarIcon@2x.png`, copied into the app bundle by `build_app.sh`), falling
+    /// back to an SF Symbol when running via `swift run` (no bundle, so
+    /// `Bundle.main` can't resolve the custom asset). Always a template image so
+    /// AppKit tints it correctly for light/dark and the selection highlight.
+    private static var menuBarIcon: NSImage? {
+        let image = Bundle.main.image(forResource: "MenuBarIcon")
+            ?? NSImage(systemSymbolName: "pencil.and.scribble", accessibilityDescription: AppInfo.name)
+        image?.isTemplate = true
+        return image
     }
 
     /// Declarative menu definition. Order here is the order shown.

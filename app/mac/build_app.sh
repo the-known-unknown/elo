@@ -40,6 +40,8 @@ mkdir -p "${APP_BUNDLE}/Contents/Resources"
 cp "${BUILD_BIN}" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
 cp "Resources/Info.plist" "${APP_BUNDLE}/Contents/Info.plist"
 cp "Resources/AppIcon.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
+cp "Resources/MenuBarIcon.png" "${APP_BUNDLE}/Contents/Resources/MenuBarIcon.png"
+cp "Resources/MenuBarIcon@2x.png" "${APP_BUNDLE}/Contents/Resources/MenuBarIcon@2x.png"
 
 # Prefer a stable identity so the Accessibility grant survives rebuilds.
 if security find-identity -v -p codesigning | grep -q "${SIGN_IDENTITY}"; then
